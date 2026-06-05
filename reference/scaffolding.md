@@ -148,6 +148,15 @@ Per-machine, gitignored. Tells the CLI where Live's Extension Host module is.
 EXTENSION_HOST_PATH=/path/to/ExtensionHostNodeModule.node
 ```
 
+**Where the module actually lives.** The file is always named `ExtensionHostNodeModule.node`, sitting in an `ExtensionHost/` folder inside the Live install (a bundled `node.exe`/node runtime sits next to it — that's what runs the extension, independent of your local Node).
+
+- **Windows:** `<install root>\Program\ExtensionHost\ExtensionHostNodeModule.node`. The install root is `<base>\Ableton\<edition>`, where `<base>` is `C:\ProgramData` or `C:\Program Files` and `<edition>` is the version folder, e.g. `Live 12 Beta`. Verified example:
+  `C:\ProgramData\Ableton\Live 12 Beta\Program\ExtensionHost\ExtensionHostNodeModule.node`
+  (Backslashes are fine in `.env` — it's a raw string, not shell-escaped.)
+- **macOS:** inside the Live application bundle, under `.../Ableton Live <edition>.app/Contents/.../ExtensionHost/ExtensionHostNodeModule.node`.
+
+The scaffolder auto-detects this by scanning for `Ableton Live*.exe` (Windows) / the `.app` (macOS) and appending `Program/ExtensionHost/ExtensionHostNodeModule.node`; it fills `EXTENSION_HOST_PATH` for you. If it can't find it (or the build moved), set it by hand to the path above.
+
 ### `src/html.d.ts` (UI projects)
 Lets TypeScript accept `import html from "./interface.html"`.
 
