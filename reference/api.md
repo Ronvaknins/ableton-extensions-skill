@@ -85,7 +85,7 @@ Rendering is how you "read" audio — there's no live audio access.
 `Clip` (base) → `AudioClip`, `MidiClip`.
 
 - Common: `name`, `color`, `muted`, `looping`, plus timing `startTime`, `endTime`, `duration`, `loopStart`, `loopEnd`, `startMarker`, `endMarker`
-- `AudioClip`: `isWarped`, `warpMode: WarpMode`, `sample: Sample`
+- `AudioClip`: `filePath` (get), `warping` (boolean, get/set), `warpMode: WarpMode` (get/set), `warpMarkers` (get). Note `isWarped` is **not** a clip property — it's only an argument to `createAudioClip(...)`.
 - `MidiClip`: `notes: NoteDescription[]` — **get/set the whole array** to edit MIDI
 
 ```typescript
