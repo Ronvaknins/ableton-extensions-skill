@@ -7,7 +7,7 @@ description: Scaffold, write, build, and package Ableton Live extensions with th
 
 Build tools that run inside Ableton Live. An extension is a Node/TypeScript module bundled to a single CommonJS file that Live's **Extension Host** loads. It registers **commands** and wires them to **context-menu actions**, then reads and mutates the Live Set through a typed object model (tracks, clips, notes, devices, tempo, scenes).
 
-Extensions are **not** real-time audio processors. They automate edits, transform musical data, and add UI — they cannot process the audio stream live. Visualize results instead.
+Extensions are an **offline editing / automation** layer. They are **not** real-time processors and **not** devices in the signal chain: they cannot process the live audio **or MIDI** stream. The SDK has no note-on/off, MIDI-input, or stream callbacks (the only `on*` callbacks are dialog/registration lifecycle internals) — an extension only acts when the user triggers a command, then mutates the data model. For **real-time MIDI/audio transformation** (e.g. "play one key, hear a chord"), the right tool is a **MIDI/audio effect device** in the track chain: Live's built-in MIDI effects (the **Chord** device does exactly one-note→chord — set Shift voices to e.g. +4, +7) or a **Max for Live** device — *not* an Extension. Extensions complement those by transforming clips/notes at edit time, batch-editing the Set, and adding context-menu tools, dialogs, and rendering.
 
 ## Local SDK location
 
