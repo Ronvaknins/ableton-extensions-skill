@@ -4,15 +4,17 @@
 
 - **Node.js >= 24.14.1** (the generated `package.json` pins `engines.node` to this).
 - An **Ableton Live beta build** that supports Extensions, with **Developer Mode** enabled in *Preferences → Extensions*.
-- The SDK distribution unpacked at `C:\DEV\extensions-sdk-1.0.0-beta.0`.
+- The SDK distribution unpacked somewhere on your machine. Note the directory you unpacked it to — the steps below refer to it as `<sdk-dir>` (e.g. the folder containing `ableton-create-extension-1.0.0-beta.0.tgz`).
 
 ## Creating a new project
 
-Run the bundled `create-extension` tool via `npx`, pointing at its tarball. Pass an optional target directory:
+Run the bundled `create-extension` tool via `npx`, pointing at its tarball. Replace `<sdk-dir>` with the path where you unpacked the SDK, and `<version>` with the version of the SDK you downloaded (check the actual `.tgz` filenames in `<sdk-dir>`). Pass an optional target directory:
 
 ```sh
-npx file:C:/DEV/extensions-sdk-1.0.0-beta.0/ableton-create-extension-1.0.0-beta.0.tgz my-extension
+npx file:<sdk-dir>/ableton-create-extension-<version>.tgz my-extension
 ```
+
+> The examples below use `1.0.0-beta.0`; substitute whatever version your SDK ships.
 
 Interactive prompts (in order):
 1. **Extension name** — sanitized to lowercase alphanumeric + hyphens; defaults to the directory name.

@@ -11,15 +11,15 @@ Extensions are an **offline editing / automation** layer. They are **not** real-
 
 ## Local SDK location
 
-The SDK distribution lives at `C:\DEV\extensions-sdk-1.0.0-beta.0`:
+The SDK distribution lives wherever you unpacked it — referred to below as `<sdk-dir>`. It contains:
 - `docs/` — pre-built HTML documentation (getting-started, essentials, development, design)
 - `api/` — TypeDoc HTML API reference
 - `examples/` — 7 runnable examples (read these for canonical patterns)
-- `ableton-create-extension-1.0.0-beta.0.tgz` — the scaffolding tool
-- `ableton-extensions-cli-1.0.0-beta.0.tgz` — the build/run/package CLI
-- `ableton-extensions-sdk-1.0.0-beta.0.tgz` — the SDK library
+- `ableton-create-extension-<version>.tgz` — the scaffolding tool
+- `ableton-extensions-cli-<version>.tgz` — the build/run/package CLI
+- `ableton-extensions-sdk-<version>.tgz` — the SDK library
 
-Version: **1.0.0-beta.0**, API version **"1.0.0"**. Requires **Node.js >= 24.14.1**.
+This skill was written against SDK **1.0.0-beta.0** (API version **"1.0.0"**); newer builds may ship a different `<version>` — check the actual `.tgz` filenames in `<sdk-dir>` and substitute it wherever it appears below. Requires **Node.js >= 24.14.1**.
 
 ## Reference files (load as needed)
 
@@ -67,7 +67,7 @@ export function activate(activation: ActivationContext) {
 
 ## Standard workflow
 
-1. **Scaffold** (new project): `npx file:C:/DEV/extensions-sdk-1.0.0-beta.0/ableton-create-extension-1.0.0-beta.0.tgz <dir>` — interactive prompts for name, author, Live path, UI support. See [reference/scaffolding.md](reference/scaffolding.md).
+1. **Scaffold** (new project): `npx file:<sdk-dir>/ableton-create-extension-<version>.tgz <dir>` — interactive prompts for name, author, Live path, UI support. See [reference/scaffolding.md](reference/scaffolding.md).
 2. **Write** `src/extension.ts` — register commands + menu actions; see [reference/recipes.md](reference/recipes.md).
 3. **Run in Live**: `npm start` (builds with esbuild, then `extensions-cli run` loads it into the Extension Host). Enable Developer Mode first in Live's *Preferences → Extensions*.
 4. **Debug**: `console.log/warn/error` → `ExtensionHost.txt` (paths in [reference/scaffolding.md](reference/scaffolding.md)). In VS Code, F5 / "Debug Extension".
