@@ -1,6 +1,6 @@
 # Recipes — idiomatic code for common tasks
 
-All snippets assume `const context = initialize(activation, "1.0.0")` inside `activate`. Each example folder under `C:\DEV\extensions-sdk-1.0.0-beta.0\examples` is the canonical source — read the closest one when in doubt.
+All snippets assume `const context = initialize(activation, "1.0.0")` inside `activate`. Each example folder under `<sdk-dir>/examples` is the canonical source — read the closest one when in doubt.
 
 | Task | Example folder |
 |---|---|
@@ -9,7 +9,7 @@ All snippets assume `const context = initialize(activation, "1.0.0")` inside `ac
 | Modal dialog (WebView UI) | `modal-dialog` |
 | Progress dialog + cancel | `progress-dialog` |
 | Create audio clips / import | `audio-clips` |
-| Arrangement time selection | `arrangementselection` |
+| Arrangement time selection (incl. take lanes) | `arrangementselection` |
 | Render + analyze + edit | `strip-silence` |
 
 ## 1. Context menu → command (the base pattern)
@@ -21,10 +21,19 @@ context.commands.registerCommand("myext.process", () => {
 
 context.ui.registerContextMenuAction(
   "ClipSlot",            // scope (see api.md)
-  "Process this slot",   // user-facing label
-  "myext.process",       // command id (namespace it!)
+  "Process this slot",   // label shown in the menu
+  "myext.process",       // command id (namespace it — it must be unique)
 );
 ```
+
+Async commands: catch their errors (see the notes at the end), so wrap them once:
+```typescript
+const safe = (fn: (arg: unknown) => Promise<unknown>) => (arg: unknown) => {
+  fn(arg).catch((e) => console.error(String(e)));
+};
+context.commands.registerCommand("myext.asyncThing", safe(async (arg) => { /* await … */ }));
+```
+The recipes below use `safe`.
 
 Register the same command under several scopes:
 ```typescript
@@ -46,13 +55,19 @@ A scope may match objects you must reject — resolve to the base, then check.
 ```typescript
 import { initialize, AudioClip, Clip, WarpMode, type Handle, type ActivationContext } from "@ableton-extensions/sdk";
 
-context.commands.registerCommand("myext.bumpWarp", (arg: unknown) => {
+const WARP_MODES = [
+  WarpMode.Beats, WarpMode.Tones, WarpMode.Texture,
+  WarpMode.Repitch, WarpMode.Complex, WarpMode.ComplexPro,
+]; // WarpMode skips 5 — never cycle with (mode + 1) % n
+
+context.commands.registerCommand("myext.nextWarpMode", (arg: unknown) => {
   const clip = context.getObjectFromHandle(arg as Handle, Clip);
   if (!(clip instanceof AudioClip)) {
     console.error("Not an AudioClip.");
     return;
   }
-  clip.warpMode = ((clip.warpMode + 1) % 3) as WarpMode; // mutate by assignment
+  const i = WARP_MODES.indexOf(clip.warpMode);
+  clip.warpMode = WARP_MODES[(i + 1) % WARP_MODES.length]!; // mutate by assignment
 });
 ```
 
@@ -68,77 +83,91 @@ context.commands.registerCommand("myext.transposeUp", (arg: unknown) => {
   clip.notes = clip.notes.map((n) => ({ ...n, pitch: Math.min(127, n.pitch + 12) }));
 });
 ```
-Add notes: `clip.notes = [...clip.notes, { pitch: 60, startTime: 0, duration: 1, velocity: 100 }];`
+
+Add notes:
+```typescript
+clip.notes = [...clip.notes, { pitch: 60, startTime: 0, duration: 1, velocity: 100 }];
+```
 
 ## 4. Arrangement time selection
 
-Register under `"<Audio|Midi>Track.ArrangementSelection"`; the arg is an `ArrangementSelection`.
+Register under `"<Audio|Midi>Track.ArrangementSelection"`; the arg is an `ArrangementSelection`. `selected_lanes` may mix tracks and take lanes.
 
 ```typescript
-import { initialize, MidiTrack, DataModelObject, type ActivationContext, type ArrangementSelection } from "@ableton-extensions/sdk";
+import { initialize, MidiTrack, TakeLane, DataModelObject, type ActivationContext, type ArrangementSelection } from "@ableton-extensions/sdk";
 
 context.ui.registerContextMenuAction("MidiTrack.ArrangementSelection", "Fill with clips", "myext.fill");
 
-context.commands.registerCommand("myext.fill", async (arg: unknown) => {
+context.commands.registerCommand("myext.fill", safe(async (arg) => {
   const sel = arg as ArrangementSelection;
   const start = sel.time_selection_start;
   const length = sel.time_selection_end - start;
 
   const lanes = sel.selected_lanes
     .map((h) => context.getObjectFromHandle(h, DataModelObject))
-    .filter((o): o is MidiTrack => o instanceof MidiTrack);
+    .filter((o): o is MidiTrack<"1.0.0"> | TakeLane<"1.0.0"> =>
+      o instanceof MidiTrack || (o instanceof TakeLane && o.parent instanceof MidiTrack));
 
-  const clips = await Promise.all(lanes.map((lane) => lane.createMidiClip(start, length)));
-  clips.forEach((c, i) => { c.name = `Clip ${i + 1}`; });
-});
+  const clips = await context.withinTransaction(() =>
+    Promise.all(lanes.map((lane) => lane.createMidiClip(start, length))),
+  );
+  context.withinTransaction(() => clips.forEach((c, i) => { c.name = `Clip ${i + 1}`; }));
+}));
 ```
 
 ## 5. Create / import audio clips
+
+Always import outside files first and use the returned path.
 
 ```typescript
 import * as ableton from "@ableton-extensions/sdk";
 
 // Into a Session clip slot:
-context.commands.registerCommand("myext.dropClip", async (arg: unknown) => {
+context.commands.registerCommand("myext.dropClip", safe(async (arg) => {
   const slot = context.getObjectFromHandle(arg as ableton.Handle, ableton.ClipSlot);
   const imported = await context.resources.importIntoProject("C:/path/to/file.wav");
   await slot.createAudioClip({
     filePath: imported,
-    isWarped: false,
-    loopSettings: { looping: false, startMarker: 1, endMarker: 5, loopStart: 1, loopEnd: 5 },
+    isWarped: true,                       // required whenever loopSettings is given
+    loopSettings: {                       // all five fields are required
+      looping: true, startMarker: 0, endMarker: 4, loopStart: 0, loopEnd: 2,
+    },
   });
-});
+}));
 
 // Into an arrangement time selection on an AudioTrack:
-context.commands.registerCommand("myext.dropArr", async (arg: unknown) => {
+context.commands.registerCommand("myext.dropArr", safe(async (arg) => {
   const sel = arg as ableton.ArrangementSelection;
   const track = context.getObjectFromHandle(sel.selected_lanes[0]!, ableton.AudioTrack);
   const imported = await context.resources.importIntoProject("C:/path/to/file.wav");
   await track.createAudioClip({
     filePath: imported,
     startTime: sel.time_selection_start,
-    duration: sel.time_selection_end - sel.time_selection_start,
+    duration: sel.time_selection_end - sel.time_selection_start, // capped at the file length unless looping
     isWarped: false,
   });
-});
+}));
 ```
+
+Unwarped clips (`isWarped: false`) can't loop: their `loopSettings.looping` must be `false`, with `loopStart === startMarker` and `loopEnd === endMarker`.
 
 ## 6. Modal dialog (WebView UI)
 
 esbuild inlines the HTML; pass it as a data URL. The dialog talks back over the platform WebView bridge.
 
-`build.ts` must include `loader: { ".html": "text" }`. Add `src/html.d.ts` (see scaffolding.md).
+`build.ts` must include `loader: { ".html": "text" }`. Add `src/html.d.ts` (see scaffolding.md). Projects made by the creator keep the page in `ui/interface.html`.
 
 ```typescript
 import { initialize, Clip, type Handle, type ActivationContext } from "@ableton-extensions/sdk";
 import modalHtml from "../ui/interface.html"; // inlined string
 
-context.commands.registerCommand("myext.rename", async (arg: unknown) => {
+context.commands.registerCommand("myext.rename", safe(async (arg) => {
   const clip = context.getObjectFromHandle(arg as Handle, Clip);
   const url = `data:text/html,${encodeURIComponent(modalHtml)}`;
   const result = await context.ui.showModalDialog(url, 360, 240); // string posted by the dialog
-  clip.name = JSON.parse(result).name;
-});
+  const { name } = JSON.parse(result) as { name: string | null };
+  if (name) clip.name = name;                                      // null = the user pressed Escape
+}));
 
 context.ui.registerContextMenuAction("AudioClip", "Rename…", "myext.rename");
 ```
@@ -154,6 +183,7 @@ The HTML posts its result via the bridge — support both platforms:
     else if (wv) wv.postMessage(message);
   }
   function closeWithResult(result) {
+    // params must be an array holding ONE string
     send({ method: "close_and_send", params: [JSON.stringify(result)] });
   }
   document.addEventListener("keydown", (e) => {
@@ -176,6 +206,7 @@ Use Ableton's dark-theme CSS variables so the dialog matches Live (from the `mod
   --p-live-accent-primary: hsl(31,100%,67%);
   --p-live-control-text--enabled: hsl(0,0%,7%);
 }
+html { font-family: "AbletonSansSmall", sans-serif; font-size: 11.5px; font-weight: 500; }
 ```
 
 ## 7. Progress dialog with cancellation
@@ -183,18 +214,22 @@ Use Ableton's dark-theme CSS variables so the dialog matches Live (from the `mod
 ```typescript
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-context.commands.registerCommand("myext.longTask", () => {
-  void context.ui.withinProgressDialog("Working…", {}, async (update, signal) => {
+context.commands.registerCommand("myext.longTask", safe(() =>
+  context.ui.withinProgressDialog("Working…", {}, async (update, signal) => {
     for (let i = 0; i < 100; i++) {
       await delay(50);
       await update("Processing…", i);   // i = percent (0–100)
-      try { signal.throwIfAborted(); }  // user clicked Cancel
-      catch { console.warn(`Cancelled at ${i}%`); return; }
+      if (signal.aborted) {             // user clicked Cancel
+        console.warn(`Cancelled at ${i}%`);
+        return;
+      }
     }
-    await update("Cleaning up", undefined); // undefined = indeterminate
-  });
-});
+    await update("Cleaning up", undefined);
+  }),
+));
 ```
+
+The dialog closes when the callback returns or throws; `withinProgressDialog` resolves to the callback's return value.
 
 ## 8. Transactions — one undo step, batched updates
 
@@ -209,22 +244,31 @@ await Promise.all(promises);
 
 ## 9. Render audio off a track, then act on it (advanced)
 
-From `strip-silence`: render a selection to WAV, decode it (e.g. the `audio-decode` npm package), analyze, then edit within a transaction.
+From `strip-silence`: render a selection, decode it (e.g. the `audio-decode` npm package), analyze, then edit within a transaction.
 
 ```typescript
-const wavPath = await context.resources.renderPreFxAudio(
+import * as fs from "node:fs/promises";
+
+const audioPath = await context.resources.renderPreFxAudio(
   track, sel.time_selection_start, sel.time_selection_end,
 );
-// const decoded = await decodeAudio(await fs.readFile(wavPath)); analyze, then:
+// The format follows Live's Settings → Record File Type (WAV or AIFF).
+if (!audioPath.toLowerCase().endsWith(".wav")) throw new Error("Set Record File Type to WAV");
+// const decoded = await decodeAudio(await fs.readFile(audioPath)); analyze → ranges in seconds
+const beatsPerSecond = context.application.song.tempo / 60;
 const ops = context.withinTransaction(() =>
-  silenceRanges.map((r) => track.clearClipsInRange(r.start, r.end)),
+  silenceRanges.map((r) => track.clearClipsInRange(
+    sel.time_selection_start + r.start * beatsPerSecond,
+    sel.time_selection_start + r.end * beatsPerSecond,
+  )),
 );
 await Promise.all(ops);
 ```
-Extra runtime deps (like `audio-decode`) go in `package.json` `dependencies`; esbuild bundles them.
+Extra runtime deps (like `audio-decode`) go in `package.json` `dependencies`; esbuild bundles them. Check that a dependency doesn't rely on globals the extension context lacks (`TextDecoder`, `setImmediate`, `global`, … — see SKILL.md).
 
 ## Async / error-handling notes
 
-- Most object methods return `Promise` — `await` them and wrap handlers in `try/catch`; uncaught errors land in `ExtensionHost.txt`.
+- Most object methods return `Promise` — `await` them and wrap handlers in `try/catch`. Under `npm start`, logs show in the terminal; for an installed extension, in `ExtensionHost.txt`.
 - Register everything synchronously inside `activate` — don't `await` before registering commands/menus.
 - Don't cache resolved objects or handles between invocations; re-resolve from the handle each command call.
+- **Catch errors in async commands.** The extension runs in Node, where an unhandled promise rejection terminates the process by default. Wrap every `async` command body in `try/catch`, or end it with `.catch((e) => console.error(String(e)))` as `strip-silence` does — including fire-and-forget calls like `void context.ui.withinProgressDialog(...)`.

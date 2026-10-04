@@ -30,8 +30,8 @@ ableton-extensions-skill/
 ├── README.md                 # this file (human-facing; not loaded by the agent)
 └── reference/                # loaded on demand, when the agent needs the detail
     ├── scaffolding.md        # create a project, manifest/package/build configs, CLI, .env, debugging, packaging
-    ├── api.md                # the full object model: ExtensionContext, Song/Track/Clip/MidiClip, enums, scopes
-    └── recipes.md            # copy-paste code for context menus, dialogs, note/clip edits, transactions
+    ├── api.md                # the full object model, units, defaults, enums, scopes
+    └── recipes.md            # copy-paste code for menus, dialogs, notes/clips, devices, files/network, transactions
 ```
 
 - **`SKILL.md`** has YAML frontmatter (`name`, `description`). The agent reads the `description` to decide *when* to activate the skill (e.g. a request mentions an Ableton extension, MIDI clip editing, a context-menu action). Its body covers the entry-point shape, core concepts, and the workflow.
@@ -45,12 +45,12 @@ ableton-extensions-skill/
 |---|---|---|
 | **Ableton Extensions SDK** (`extensions-sdk-<version>.zip`) | the SDK library, CLI, scaffolder, docs, examples | [ableton.com/en/live/extensions](https://www.ableton.com/en/live/extensions) (beta program) |
 | **Ableton Live beta** with Extensions support | to actually load/run extensions | from the Ableton beta / Centercode |
-| **Node.js ≥ 24.14.1** | build tooling (esbuild, tsx, TypeScript) | [nodejs.org](https://nodejs.org) |
+| **Node.js ≥ 24.16.0** | build tooling (esbuild, tsx, TypeScript); older versions print `EBADENGINE` | [nodejs.org](https://nodejs.org) |
 | **A code editor** (VS Code recommended) | optional F5 debug integration | — |
 
 > **Note:** Ableton Extensions are a **beta** feature. Access to the SDK and an Extensions-capable Live build is currently via Ableton's beta program — start at the link above.
 
-This skill is built against **SDK `1.0.0-beta.0`** (API version `1.0.0`). The reference docs point at a local unpacked SDK at `C:\DEV\extensions-sdk-1.0.0-beta.0` (containing `docs/`, `api/`, `examples/`, and the `.tgz` tool packages). If you unpack the SDK elsewhere, update those absolute paths in `SKILL.md` / `reference/scaffolding.md` to match.
+This skill is built against **SDK `1.0.0-beta.1`** (API version `1.0.0`) and the Live 12.4.5 public beta. The reference docs refer to the unpacked SDK folder (containing `docs/`, `api/`, `examples/`, `upgrade.md`, and the `.tgz` tool packages) as `<sdk-dir>`, so nothing needs editing when you unpack it somewhere else.
 
 ---
 
@@ -61,7 +61,7 @@ Skills are discovered from a `skills/` directory. Copy this folder into one (ren
 **Claude Code — personal (available in every project):**
 ```sh
 # Windows (PowerShell)
-Copy-Item -Recurse C:\DEV\ableton-extensions-skill "$env:USERPROFILE\.claude\skills\ableton-extensions"
+Copy-Item -Recurse .\ableton-extensions-skill "$env:USERPROFILE\.claude\skills\ableton-extensions"
 ```
 
 **Claude Code — project-scoped (shared with a repo via git):**
@@ -123,3 +123,10 @@ Open an issue or a pull request — small corrections are just as appreciated as
 - **Tooling packages** (in the SDK zip): `@ableton-extensions/sdk`, `@ableton-extensions/cli`, `@ableton-extensions/create-extension`
 
 The reference files in this skill are distilled from those sources and verified against the actual SDK type definitions.
+
+### How the 1.0.0-beta.1 update was verified
+
+- **API surface** — every class, property and method checked against `@ableton-extensions/sdk@1.0.0-beta.1`'s type definitions and the bundled `api/` reference.
+- **CLI and creator** — flags and defaults from `ableton-extensions-cli help`, running it, and the files the creator generates.
+- **Behaviour** — from Ableton's docs, the typings' JSDoc and the release notes, plus what running the CLI and the creator shows.
+- **Code** — every TypeScript block in `SKILL.md`, `reference/api.md` and `reference/recipes.md` typechecks (`strict`, `noUncheckedIndexedAccess`) against beta.1.
